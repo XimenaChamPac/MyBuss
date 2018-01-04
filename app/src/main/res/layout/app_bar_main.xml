@@ -20,7 +20,8 @@
 
     </android.support.design.widget.AppBarLayout>
 
-    <include layout="@layout/content2_main" />
+    <include layout="@layout/content2_main"
+        android:id="@+id/include" />
 
     <android.support.design.widget.FloatingActionButton
         android:id="@+id/fab"
@@ -50,12 +51,29 @@
 
 
     <Button
-        android:id="@+id/btnactualizar"
+    android:id="@+id/btnactualizar"
+    android:layout_width="69dp"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom|left"
+
+    android:text="Ruta" />
+    <Button
+        android:id="@+id/btnubi"
         android:layout_width="69dp"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="42dp"
         android:layout_gravity="bottom|left"
 
-        android:text="Ruta" />
+        android:text="Ubi" />
+    <Button
+        android:id="@+id/btnreport"
+        android:layout_width="69dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="88dp"
+        android:layout_gravity="bottom|left"
+
+        android:text="Repor" />
+
 
 
 </android.support.design.widget.CoordinatorLayout>

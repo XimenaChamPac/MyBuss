@@ -18,5 +18,12 @@
         tools:context="com.example.eloy1.mybuss.MapsActivity"
         tools:layout_editor_absoluteY="86dp"
         tools:layout_editor_absoluteX="67dp" />
+    <ListView
+        android:id="@+id/lstView"
+        android:layout_width="51dp"
+        android:layout_height="495dp"
+        android:visibility="invisible"
+        tools:layout_editor_absoluteY="8dp"
+        tools:layout_editor_absoluteX="8dp" />
 
 </android.support.constraint.ConstraintLayout>
