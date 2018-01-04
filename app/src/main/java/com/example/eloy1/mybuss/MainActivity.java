@@ -2,6 +2,9 @@ package com.example.eloy1.mybuss;
 
 
 import android.Manifest;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -9,7 +12,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.Point;
+import android.graphics.drawable.BitmapDrawable;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -20,6 +25,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -27,7 +33,9 @@ import android.support.annotation.RequiresApi;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Base64;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -39,7 +47,9 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.AdapterView;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -67,6 +77,7 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -98,7 +109,10 @@ public class MainActivity extends AppCompatActivity
     private LocationManager locationManager;
 
     private TextView textViewColor;
-    private Button ubicacionCarro;
+    private Button ubicacionCarro,ubiActual,reportar;
+    ListView lstViewm;
+    List<Coordenadas> users = new ArrayList<>();
+    TextView ultPosi,userrow;
 
     //////////////
     double latitudCambiante,longitudCambiante;
@@ -117,6 +131,11 @@ public class MainActivity extends AppCompatActivity
     boolean bP19Bida=false;
     boolean bP19Bvuelta=false;
     //////////////////
+
+    private static final int Image_Capture_Code = 1;
+    private ImageView imgCapture;
+    String paraMandar;
+
 
 
 
@@ -186,6 +205,46 @@ public class MainActivity extends AppCompatActivity
             locationStart();
         }
         ////////////////////////////
+        lstViewm=(ListView)findViewById(R.id.lstView);
+        ubiActual =(Button)findViewById(R.id.btnubi);
+        reportar=(Button)findViewById(R.id.btnreport) ;
+
+        //cargar datos
+
+        lstViewm.setOnItemClickListener(new AdapterView.OnItemClickListener(){
+
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                userSelected = users.get(position);
+                //edtUser.setText(userSelected.getCoordendas());
+            }
+        });
+
+
+        imgCapture = (ImageView) findViewById(R.id.capturedImage);
+
+        reportar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent cInt = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                startActivityForResult(cInt,Image_Capture_Code);
+
+
+            }
+        });
+
+
+
+        ubiActual.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                new GetData().execute(Common.getAddressApi());
+
+
+            }
+        });
+
+
 
 
 
@@ -198,7 +257,7 @@ public class MainActivity extends AppCompatActivity
 
                 LatLng originD19As = new LatLng(PosAct.latitude, PosAct.longitude);//posicion actual
                 LatLng destinationD19As = new LatLng(PosMarcadorMovil.latitude, PosMarcadorMovil.longitude);//posicion de destino que vendria a ser la del paradero
-                DrawRouteMaps.getInstance(getApplicationContext()).draw(originD19As, destinationD19As, mMap,1);//dibuja el recorrido usando la clase DrawRouteMaps
+                DrawRouteMaps.getInstance(getApplicationContext()).draw(originD19As, destinationD19As, mMap,1,1 );//dibuja el recorrido usando la clase DrawRouteMaps
                 Toast.makeText(getApplicationContext(), "obtiene ruta al marcador", Toast.LENGTH_LONG).show();
             }
         }));
@@ -207,7 +266,7 @@ public class MainActivity extends AppCompatActivity
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-               Toast.makeText(getApplicationContext(), "Manda ubicaciones", Toast.LENGTH_LONG).show();
+               //Toast.makeText(getApplicationContext(), "Manda ubicaciones", Toast.LENGTH_LONG).show();
             }
         });
 
@@ -309,6 +368,64 @@ public class MainActivity extends AppCompatActivity
             }
         });
     }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == Image_Capture_Code) {
+            if (resultCode == RESULT_OK) {
+                Bitmap bp = (Bitmap) data.getExtras().get("data");
+                //aqui esta la informacion de la foto tomada
+                //imgCapture.setImageBitmap(bp);
+                paraMandar=getBase64String(bp);
+                new PostDataReportar(paraMandar).execute(Common.getAddressApi());
+            } else if (resultCode == RESULT_CANCELED) {
+                Toast.makeText(this, "Cancelled", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private Bitmap getScaledBitmap(Bitmap b, int reqWidth, int reqHeight)
+    {
+        int bWidth = b.getWidth();
+        int bHeight = b.getHeight();
+
+        int nWidth = bWidth;
+        int nHeight = bHeight;
+
+        if(nWidth > reqWidth)
+        {
+            int ratio = bWidth / reqWidth;
+            if(ratio > 0)
+            {
+                nWidth = reqWidth;
+                nHeight = bHeight / ratio;
+            }
+        }
+
+        if(nHeight > reqHeight)
+        {
+            int ratio = bHeight / reqHeight;
+            if(ratio > 0)
+            {
+                nHeight = reqHeight;
+                nWidth = bWidth / ratio;
+            }
+        }
+
+        return Bitmap.createScaledBitmap(b, nWidth, nHeight, true);
+    }
+
+    private String getBase64String(Bitmap bitmap)
+    {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+
+        byte[] imageBytes = baos.toByteArray();
+
+        String base64String = Base64.encodeToString(imageBytes, Base64.NO_WRAP);
+
+        return base64String;
+    }
 
     private void locationStart() {
         LocationManager mlocManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
@@ -356,14 +473,15 @@ public class MainActivity extends AppCompatActivity
             //Toast.makeText(getApplicationContext(), Text, Toast.LENGTH_LONG).show();
             ///////VISUALIZAR AUTOMATICAMENTE PARADEROS
             //visualizar_paraderos(0.50);
+            noti(1);
+
             ///////FIN VISUALIZAR AUTOMATICAMENTE PARADEROS
             LatLng latLng_ = new LatLng(loc.getLatitude(), loc.getLongitude());//aqui
-
+/*
             mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng_));
-            //mMap.animateCamera(CameraUpdateFactory.zoomTo(23));
-            // mMap.animateCamera(CameraUpdateFactory.zoomIn());
-            mMap.animateCamera(CameraUpdateFactory.zoomTo(14 ));//Zoom
 
+            mMap.animateCamera(CameraUpdateFactory.zoomTo(14 ));//Zoom
+*/
             this.mainActivity.setLocation(loc);
         }
 
@@ -422,14 +540,14 @@ public class MainActivity extends AppCompatActivity
 
 
 
-    class GetData extends AsyncTask<String,Void,String> {
+    class GetData extends AsyncTask<String,Void,String>{
         ProgressDialog pd= new ProgressDialog(MainActivity.this);
 
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-            //pd.setTitle("Porfavor espere ..");
-            //pd.show();
+            pd.setTitle("Porfavor espere ..");
+            pd.show();
         }
 
 
@@ -441,48 +559,38 @@ public class MainActivity extends AppCompatActivity
 
             HTTPDataHandler http= new HTTPDataHandler();
             stream=http.GetHTTPData(urlString);
-            //Toast.makeText(getApplicationContext(), stream, Toast.LENGTH_LONG).show();
-
             return stream;
         }
 
         @Override
         protected void onPostExecute(String s) {
             super.onPostExecute(s);
+            CustomAdapter adapter;
+
             Gson gson = new Gson();
             Type listType = new TypeToken<List<Coordenadas>>(){}.getType();
-            coordenadas=gson.fromJson(s,listType);
+            users=gson.fromJson(s,listType);
+            adapter=new CustomAdapter(getApplicationContext(),users);
+            lstViewm.setAdapter(adapter);
+            //ultPosi.setText(userrow.getText());
+            // ultPosi.setText(adapter.getItem(adapter.getCount()).toString());
 
+            Toast toast1 = Toast.makeText(getApplication(), adapter.ultiDato(lstViewm.getCount()-1), Toast.LENGTH_SHORT);
+            toast1.show();
+            String ubiActual=adapter.ultiDato(lstViewm.getCount()-1);
+            String[] parts = ubiActual.split(",");
+            String part1 = parts[0]; // 123
+            String part2 = parts[1]; // 654321
+            double partlat=Double.parseDouble(part1);
+            double partlong=Double.parseDouble(part2);
+            LatLng latLngActual = new LatLng(partlat,partlong);
 
+            DrawMarker.getInstance(getApplicationContext()).draw(mMap, latLngActual , R.drawable.car, "Posicion Carro"); //agregar marcadores
 
-            CustomAdapter adapter=new CustomAdapter(getApplicationContext(),coordenadas);
-            //lstView=(ListView)findViewById(R.id.lstView);
-
-
-            //lstView.setAdapter(adapter);
-
-
-
-/*
-            TextView txtlat= (TextView) findViewById(R.id.txtlatitud);
-            TextView txtlon= (TextView) findViewById(R.id.txtlongitud);
-            String lats= (String) txtlat.getText();
-            String lons=(String) txtlon.getText();
-            double latd=Double.parseDouble(lats);
-            double lond=Double.parseDouble(lons);
-            LatLng coor = new LatLng(latd,lond);
-            MarkerOptions markerOptions = new MarkerOptions(); //para crear el marcador
-            markerOptions.position(coor);//y aqui obtiene la posicion para el marcador
-            setPosicion(coor);//coloca el marcador
-            markerOptions.title("linea 1");//la etiqueta para el marcador
-            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA));//color del marcador
-            mCurrLocationMarker = mMap.addMarker(markerOptions);//agregar el marcador al mapa
-*/
-
+            lstViewm.clearTextFilter();
             pd.dismiss();
         }
     }
-
 
     class PostData extends AsyncTask<String,String,String>{
         ProgressDialog pd = new ProgressDialog(MainActivity.this);
@@ -492,8 +600,6 @@ public class MainActivity extends AppCompatActivity
         public PostData(String latitud) {
             this.latitud= latitud;
         }
-
-
 
         @Override
         protected void onPreExecute() {
@@ -526,6 +632,44 @@ public class MainActivity extends AppCompatActivity
     }
 
 
+    class PostDataReportar extends AsyncTask<String,String,String>{
+        ProgressDialog pd = new ProgressDialog(MainActivity.this);
+        String latitud;
+
+
+        public PostDataReportar(String latitud) {
+            this.latitud= latitud;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            // pd.setTitle("porfavor espere ....");
+            //pd.show();
+        }
+        @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+        @Override
+        protected String doInBackground(String... params) {
+            String urlString=params[0];
+
+            HTTPDataHandler hh=new HTTPDataHandler();
+            String json="{\"reportar\":\""+latitud+"\"}";
+            //String json="{\"latitud\":\""+latitud+"\",\"longitud\":\"" + longitud+"\"}";
+            hh.PostHTTPData(urlString,json);
+            return "";
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+
+            //Refresh DAta
+            //  new GetData().execute(Common.getAddressApi());
+            pd.dismiss();
+        }
+
+
+    }
     // Metodo para cargar los elementos de la mainactivity
     private void cargarelementos(){
         // Inflamos el mapa
@@ -673,7 +817,8 @@ public class MainActivity extends AppCompatActivity
         if(ConPoMov!="") {
 
             //https://www.google.com/maps/place/seguipersa+e.i.r.l/@-16.4057649,-71.5029722,17z/data=!3m1!4b1!4m5!3m4!1s0x91424b74b1675399:0x82c364f2d1e97324!8m2!3d-16.4057701!4d-71.5007781
-            intent.putExtra(Intent.EXTRA_TEXT, "Enviado desde MYBuss. Me estoy dirigiendo a: http://maps.google.com/?q=" + PosMarcadorMovil.latitude + "," + PosMarcadorMovil.longitude);
+            intent.putExtra(Intent.EXTRA_TEXT, "Enviado desde MYBuss. Me estoy dirigiendo " +
+                    "a: http://maps.google.com/?q=" + PosMarcadorMovil.latitude + "," + PosMarcadorMovil.longitude);
             startActivity(Intent.createChooser(intent, "Compartir con"));
         }else{
             Toast.makeText(this, "No se ha seleccionado ningun Destino", Toast.LENGTH_LONG).show();
@@ -684,7 +829,9 @@ public class MainActivity extends AppCompatActivity
     private void compartir() {
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("text/plain");
-        intent.putExtra(Intent.EXTRA_TEXT, "Usa nuestro aplicativo MyBuss para movilizarte por Arequipa https://drive.google.com/file/d/1OGnJfxuUaM0J6O28BkUMQ-idZZ_xQoyy/view?usp=sharing");
+        intent.putExtra(Intent.EXTRA_TEXT, "Usa nuestro aplicativo MyBuss para movilizarte " +
+                "por Arequipa https://drive.google.com/file/d/1OGnJfxuUaM0J6O28BkUMQ-idZZ_xQoyy/" +
+                "view?usp=sharing");
         startActivity(Intent.createChooser(intent, "Compartir con"));
     }
 
@@ -694,6 +841,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void visualizar_rutas() {
+        RouteDrawerTask ll=new RouteDrawerTask();
         //DESCOMENTAR PARA VER DIFERENTES RUTAS
         //COMOS E TRABAJA CON EL API DE GOOGLE MAPS A MAS CONSULTAS NOS QUEDAMOS SIN
         //ACCESO POR QUE ESTAMOS USANDO CUENTA GRATIOS
@@ -702,16 +850,21 @@ public class MainActivity extends AppCompatActivity
             //Ruta D 19A : Alto San Martin-Cercado Y Viceversa BAJADA
             double laD19Ab[] = {-16.403938,-16.405605,-16.40508,-16.402515,-16.403969,-16.402437,-16.401203,-16.40982,-16.407604,-16.406862,-16.40608};
             double lnD19Ab[] = {-71.490654,-71.50588,-71.50747,-71.51063,-71.512985,-71.51497,-71.516754,-71.53205,-71.53397,-71.53301,-71.533775};
+
             LatLng destinationMarker = new LatLng(laD19Ab[0], lnD19Ab[0]);
             DrawMarker.getInstance(this).draw(mMap, destinationMarker, R.drawable.marker_a, "Ruta D 19A VUELTA"); //agregar marcadores
 
             for(int D19A=0; D19A < laD19Ab.length;D19A++) {
                 if(D19A+1<laD19Ab.length) {
+                    ll.setPuntos(laD19Ab[D19A], lnD19Ab[D19A]);
+                    ll.setPuntos(laD19Ab[D19A + 1], lnD19Ab[D19A + 1]);
+
                     LatLng originD19A = new LatLng(laD19Ab[D19A], lnD19Ab[D19A]);//posicion actual
                     LatLng destinationD19A = new LatLng(laD19Ab[D19A + 1], lnD19Ab[D19A + 1]);//posicion de destino que vendria a ser la del paradero
-                    DrawRouteMaps.getInstance(this).draw(originD19A, destinationD19A, mMap,2);//dibuja el recorrido usando la clase DrawRouteMaps
+
+                    DrawRouteMaps.getInstance(this).draw(originD19A, destinationD19A, mMap,2,1);//dibuja el recorrido usando la clase DrawRouteMaps
                     //DrawMarker.getInstance(this).draw(mMap, origin, R.drawable.marker_a, "Posicion Actual"); //agregar marcadores
-                    DrawMarker.getInstance(this).draw(mMap, destinationMarker, R.drawable.marker_b, "Ruta D 19A IDA");//marcador de destino
+                    //DrawMarker.getInstance(this).draw(mMap, destinationMarker, R.drawable.marker_b, "Ruta D 19A IDA");//marcador de destino
 
                     LatLngBounds boundsD19A = new LatLngBounds.Builder().include(originD19A).include(destinationD19A).build();
                     Point displaySizeD19A = new Point();
@@ -733,7 +886,7 @@ public class MainActivity extends AppCompatActivity
                 if(D19A+1<laD19As.length) {
                     LatLng originD19As = new LatLng(laD19As[D19A], lnD19As[D19A]);//posicion actual
                     LatLng destinationD19As = new LatLng(laD19As[D19A + 1], lnD19As[D19A + 1]);//posicion de destino que vendria a ser la del paradero
-                    DrawRouteMaps.getInstance(this).draw(originD19As, destinationD19As, mMap,1);//dibuja el recorrido usando la clase DrawRouteMaps
+                    DrawRouteMaps.getInstance(this).draw(originD19As, destinationD19As, mMap,1,1);//dibuja el recorrido usando la clase DrawRouteMaps
                     //DrawMarker.getInstance(this).draw(mMap, destination, R.drawable.marker_b, "Paradero Seleccionado");//marcador de destino
 
                     LatLngBounds boundsD19As = new LatLngBounds.Builder().include(originD19As).include(destinationD19As).build();
@@ -745,6 +898,8 @@ public class MainActivity extends AppCompatActivity
         }
         if(bD03AAida==true) {
             Toast.makeText(this, "Ruta D 03AA IDA", Toast.LENGTH_LONG).show();
+
+
             //Ruta D 03AA : Jerusalen-Mariano Melgar-Cercado Y Viceversa BAJADA
             double laD03AAb[] = {-16.39928,-16.398777,-16.398077,-16.398275,-16.397173,-16.39545,-16.395885,-16.395098,-16.392704,-16.392345,-16.391865,-16.3923,-16.391382,-16.394304,-16.400385,-16.400558,-16.401217,-16.401033,-16.403107,-16.403519,-16.40128,-16.401623,-16.40141,-16.402328,-16.400192,-16.40239,-16.401365,-16.404472,-16.400915,-16.404552,-16.40533,-16.409851};
             double lnD03AAb[] = {-71.48915,-71.48823,-71.48739,-71.48925,-71.48879,-71.48827,-71.4858,-71.48419,-71.482056,-71.48311,-71.48378,-71.48402,-71.485565,-71.48914,-71.49023,-71.48896,-71.48898,-71.49029,-71.49058,-71.494865,-71.494415,-71.495285,-71.500206,-71.502846,-71.5042,-71.50792,-71.50865,-71.51386,-71.5192,-71.522194,-71.52156,-71.53201};
@@ -753,9 +908,11 @@ public class MainActivity extends AppCompatActivity
 
             for(int D03AA=0; D03AA < laD03AAb.length;D03AA++) {
                 if(D03AA+1<laD03AAb.length) {
+
+
                     LatLng originD03AA = new LatLng(laD03AAb[D03AA], lnD03AAb[D03AA]);//posicion actual
                     LatLng destinationD03AA= new LatLng(laD03AAb[D03AA + 1], lnD03AAb[D03AA + 1]);//posicion de destino que vendria a ser la del paradero
-                    DrawRouteMaps.getInstance(this).draw(originD03AA, destinationD03AA, mMap,1);//dibuja el recorrido usando la clase DrawRouteMaps
+                    DrawRouteMaps.getInstance(this).draw(originD03AA, destinationD03AA, mMap,1,3);//dibuja el recorrido usando la clase DrawRouteMaps
                     //DrawMarker.getInstance(this).draw(mMap, origin, R.drawable.marker_a, "Posicion Actual"); //agregar marcadores
                     //DrawMarker.getInstance(this).draw(mMap, destination, R.drawable.marker_b, "Paradero Seleccionado");//marcador de destino
 
@@ -778,9 +935,11 @@ public class MainActivity extends AppCompatActivity
 
             for(int D03AA=0; D03AA < laD03AAs.length;D03AA++) {
                 if(D03AA+1<laD03AAs.length) {
+                    ll.setPuntos(laD03AAs[D03AA], lnD03AAs[D03AA]);
+                    ll.setPuntos(laD03AAs[D03AA + 1], lnD03AAs[D03AA + 1]);
                     LatLng originD03AA = new LatLng(laD03AAs[D03AA], lnD03AAs[D03AA]);//posicion actual
                     LatLng destinationD03AA= new LatLng(laD03AAs[D03AA + 1], lnD03AAs[D03AA + 1]);//posicion de destino que vendria a ser la del paradero
-                    DrawRouteMaps.getInstance(this).draw(originD03AA, destinationD03AA, mMap,2);//dibuja el recorrido usando la clase DrawRouteMaps
+                    DrawRouteMaps.getInstance(this).draw(originD03AA, destinationD03AA, mMap,2,1);//dibuja el recorrido usando la clase DrawRouteMaps
                     //DrawMarker.getInstance(this).draw(mMap, origin, R.drawable.marker_a, "Posicion Actual"); //agregar marcadores
                     //DrawMarker.getInstance(this).draw(mMap, destination, R.drawable.marker_b, "Paradero Seleccionado");//marcador de destino
 
@@ -804,7 +963,7 @@ public class MainActivity extends AppCompatActivity
                 if(P010+1<laP010ida.length) {
                     LatLng originP010 = new LatLng(laP010ida[P010], lnP010ida[P010]);//posicion actual
                     LatLng destinationP010= new LatLng(laP010ida[P010 + 1], lnP010ida[P010 + 1]);//posicion de destino que vendria a ser la del paradero
-                    DrawRouteMaps.getInstance(this).draw(originP010, destinationP010, mMap,1);//dibuja el recorrido usando la clase DrawRouteMaps
+                    DrawRouteMaps.getInstance(this).draw(originP010, destinationP010, mMap,1,3);//dibuja el recorrido usando la clase DrawRouteMaps
                     //DrawMarker.getInstance(this).draw(mMap, origin, R.drawable.marker_a, "Posicion Actual"); //agregar marcadores
                     //DrawMarker.getInstance(this).draw(mMap, destination, R.drawable.marker_b, "Paradero Seleccionado");//marcador de destino
 
@@ -829,7 +988,7 @@ public class MainActivity extends AppCompatActivity
                 if(P010+1<laP010vuelta.length) {
                     LatLng originP010 = new LatLng(laP010vuelta[P010], lnP010vuelta[P010]);//posicion actual
                     LatLng destinationP010= new LatLng(laP010vuelta[P010 + 1], lnP010vuelta[P010 + 1]);//posicion de destino que vendria a ser la del paradero
-                    DrawRouteMaps.getInstance(this).draw(originP010, destinationP010, mMap,2);//dibuja el recorrido usando la clase DrawRouteMaps
+                    DrawRouteMaps.getInstance(this).draw(originP010, destinationP010, mMap,2,1);//dibuja el recorrido usando la clase DrawRouteMaps
                     //DrawMarker.getInstance(this).draw(mMap, origin, R.drawable.marker_a, "Posicion Actual"); //agregar marcadores
                     //DrawMarker.getInstance(this).draw(mMap, destination, R.drawable.marker_b, "Paradero Seleccionado");//marcador de destino
 
@@ -852,7 +1011,7 @@ public class MainActivity extends AppCompatActivity
                 if(P19B+1<laP19Bida.length) {
                     LatLng originP19B = new LatLng(laP19Bida[P19B], lnP19Bida[P19B]);//posicion actual
                     LatLng destinationP19B= new LatLng(laP19Bida[P19B + 1], lnP19Bida[P19B + 1]);//posicion de destino que vendria a ser la del paradero
-                    DrawRouteMaps.getInstance(this).draw(originP19B, destinationP19B, mMap,1);//dibuja el recorrido usando la clase DrawRouteMaps
+                    DrawRouteMaps.getInstance(this).draw(originP19B, destinationP19B, mMap,1,1);//dibuja el recorrido usando la clase DrawRouteMaps
                     //DrawMarker.getInstance(this).draw(mMap, origin, R.drawable.marker_a, "Posicion Actual"); //agregar marcadores
                     //DrawMarker.getInstance(this).draw(mMap, destination, R.drawable.marker_b, "Paradero Seleccionado");//marcador de destino
 
@@ -876,7 +1035,7 @@ public class MainActivity extends AppCompatActivity
                 if(P19B+1<laP19Bvuelta.length) {
                     LatLng originP19B = new LatLng(laP19Bvuelta[P19B], lnP19Bvuelta[P19B]);//posicion actual
                     LatLng destinationP19B= new LatLng(laP19Bvuelta[P19B + 1], lnP19Bvuelta[P19B + 1]);//posicion de destino que vendria a ser la del paradero
-                    DrawRouteMaps.getInstance(this).draw(originP19B, destinationP19B, mMap,2);//dibuja el recorrido usando la clase DrawRouteMaps
+                    DrawRouteMaps.getInstance(this).draw(originP19B, destinationP19B, mMap,2,1);//dibuja el recorrido usando la clase DrawRouteMaps
                     //DrawMarker.getInstance(this).draw(mMap, origin, R.drawable.marker_a, "Posicion Actual"); //agregar marcadores
                     //DrawMarker.getInstance(this).draw(mMap, destination, R.drawable.marker_b, "Paradero Seleccionado");//marcador de destino
 
@@ -899,6 +1058,10 @@ public class MainActivity extends AppCompatActivity
     private void visualizar_paraderos(double distvisualizacion) {
         //Creamos el arraylist para guardar los marcadores
         ArrayList<Marker> listadoMar = new ArrayList<Marker>();
+        String dato2_1="* Ruta D 19A : Alto San Martin-Cercado Y Viceversa \n";
+        String dato2=dato2_1+"* Ruta D 03AA : Jerusalen-Mariano Melgar-Cercado Y Viceversa";
+        String dato3_1="* Ruta P 010 : Patasagua -Tiabaya -Cercado Y Viceversa\n";
+        String dato3=dato3_1+"* Ruta P 19B : Tiabaya -Cercado Y Viceversa";
 
         //PARA CREAR LAS PARADAS EJEMPLO1
         double la[] = {-16.400964, -16.4010329, -16.437962, -16.439956, -16.449053, -16.431501, -16.431400, -16.405901, -16.407593, -16.408831, -16.402650, -16.404151, -16.402208};
@@ -906,24 +1069,17 @@ public class MainActivity extends AppCompatActivity
         // Toast.makeText(getApplicationContext(), "antes de pasar datos", Toast.LENGTH_LONG).show();
 
         for(int x=0;x< la.length;x++) {
-            // Usamos constructor de la clase pasamos latitud, longitud y contexto
-            //llname = new LatLongName(la[x], ln[x]);
-            // Toast.makeText(getApplicationContext(), "dato pasado "+x, Toast.LENGTH_LONG).show();
-            // Elemento geocoder en el contexto
             Geocoder geocoder = new Geocoder(MainActivity.this);
             // Elemento list que contendra la direccion
             List<Address> direcciones = null;
-
             // Funcion para obtener coger el nombre desde el geocoder
             try {
                 direcciones = geocoder.getFromLocation(la[x], ln[x],1);
             } catch (Exception e) {
                 Log.d("Error", "Error en geocoder:"+e.toString());
             }
-
             // Funcion que determina si se obtuvo resultado o no
             if(direcciones != null && direcciones.size() > 0 ){
-
                 // Creamos el objeto address
                 Address direccion = direcciones.get(0);
 
@@ -934,21 +1090,16 @@ public class MainActivity extends AppCompatActivity
                         direccion.getFeatureName());
             }
             ubicacion[x]=direccionText;
-
-
             // Arrancamos la tarea en segundo plano
             // llname.execute();
         }
 //        Toast.makeText(getApplicationContext(), "despues de pasar datos", Toast.LENGTH_LONG).show();
 
-
-
-
         //para obtener la ditancia de mi PosAct a cada paradero que este cercano a nuestra posicion
         for (int i = 0; i < la.length; i++) {
             double distancia = distanciaCoord(latitudCambiante, longitudCambiante, la[i], ln[i]);//ddistancia posAct con posicion de apradero
             String aString = String.format("%.2f", distancia);//convierte de double a string pero solo con dos decimales
-            String dista = "distancia=" + aString + " Km "; //informacion de distancia que se agregara al array de ubicacines(nombre de paraderos)
+            String dista = "Distancia=" + aString + " Km "; //informacion de distancia que se agregara al array de ubicacines(nombre de paraderos)
             ubicacion[i] = dista + ubicacion[i]; //concateno la informacion de distancias con la informacion de ubicaciones (nombre de los paraderos)1
         }
 
@@ -968,10 +1119,15 @@ public class MainActivity extends AppCompatActivity
             if(distanciaCoord(latitudCambiante, longitudCambiante,la[i], ln[i])<=distvisualizacion) {
                 LatLng paradero1 = new LatLng(la[i], ln[i]);//agregar la latiud y longitud de cada paradero
                 marcadorParaderos=mMap.addMarker(new MarkerOptions().position(paradero1).title(ubicacion[i]));//agrego datoss al marcador
+                marcadorParaderos.showInfoWindow();
+                mMap.setInfoWindowAdapter(new CustomInfoWindowAdapter(LayoutInflater.from(getApplication()),ubicacion[i],dato2,dato3));
                 //añadimos el marcador a la lista
                 listadoMar.add(marcadorParaderos);
                 if(i==0){
                     bD03AAida=true;
+                }
+                if(i==10){
+                    bP010ida=true;
                 }
             }
 
@@ -1003,7 +1159,7 @@ public class MainActivity extends AppCompatActivity
             public void onMapLongClick(LatLng latLng) {
                 PosMarcadorMovil=latLng;
                 mMap.addMarker(new MarkerOptions()
-                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.avion))
+                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.freemark))
                         .anchor(0.0f, 1.0f)
                         .position(PosMarcadorMovil));
                 ConPoMov=PosMarcadorMovil.toString();
@@ -1078,8 +1234,8 @@ public class MainActivity extends AppCompatActivity
 
 
         //move map camera
-       // mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
-       // mMap.animateCamera(CameraUpdateFactory.zoomTo(10));//Zoom
+       mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+       mMap.animateCamera(CameraUpdateFactory.zoomTo(10));//Zoom
 
         //PARA DIBUJAR LA RUTA DE MI POSICION A ALGUN PARADERO DESEADO
        // LatLng origin = new LatLng(PosAct.latitude, PosAct.longitude);//posicion actual
@@ -1179,4 +1335,34 @@ public class MainActivity extends AppCompatActivity
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
 
     }
+
+    public void  noti(int vis){
+        double las[] = {-16.400964, -16.4010329, -16.437962, -16.439956, -16.449053, -16.431501, -16.431400, -16.405901, -16.407593, -16.408831, -16.402650, -16.404151, -16.402208};
+        double lns[] = {-71.497669, -71.5001998, -71.597475, -71.592929, -71.589835, -71.566536, -71.561623, -71.539925, -71.538586, -71.537175, -71.529467, -71.527738, -71.514796};
+        for(int x=0;x< las.length;x++) {
+            if (distanciaCoord(latitudCambiante, longitudCambiante, las[x], lns[x]) < vis) {
+
+                // Creamos la notificación
+                NotificationCompat.Builder mBuilder =
+                        new NotificationCompat.Builder(MainActivity.this)
+                                .setSmallIcon(android.R.drawable.ic_dialog_info).setLargeIcon((((BitmapDrawable) getResources().getDrawable(R.drawable.marker_a)).getBitmap()))
+                                .setContentTitle("Mensaje de Alerta")        // Título de la notificación
+                                .setContentText("Hay paraderos cerca.")  // texto de la notificación
+                                .setTicker("Actualiza tus paraderos!"); // si tiene espacio mostrará este texto junto al icono pequeño
+
+// Actividad a la que se dirige si pulsa la alerta
+                Intent notIntent = new Intent(MainActivity.this, MainActivity.class);
+                PendingIntent contIntent = PendingIntent.getActivity(MainActivity.this, 0, notIntent, 0);
+                mBuilder.setContentIntent(contIntent);
+
+// Generamos la notificación
+                NotificationManager mNotificationManager =
+                        (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                int NOTIF_ALERTA_ID = 0;
+                mNotificationManager.notify(NOTIF_ALERTA_ID, mBuilder.build());
+            }
+        }
+    }
+
+
 }

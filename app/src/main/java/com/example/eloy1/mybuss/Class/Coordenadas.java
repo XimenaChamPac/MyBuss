@@ -1,3 +1,4 @@
+
 package com.example.eloy1.mybuss.Class;
 
 /**
@@ -6,9 +7,24 @@ package com.example.eloy1.mybuss.Class;
 
 public class Coordenadas {
     private Id _id;
+    private String coordenadas;
+    private String reportar;
 
-    private String latitud;
+    public String getReportar() {
+        return reportar;
+    }
 
+    public void setReportar(String reportar) {
+        this.reportar = reportar;
+    }
+
+    public String getCoordendas() {
+        return coordenadas;
+    }
+
+    public void setCoordendas(String coordendas) {
+        this.coordenadas = coordendas;
+    }
 
     public Id get_id() {
         return _id;
@@ -18,13 +34,7 @@ public class Coordenadas {
         this._id = _id;
     }
 
-    public String getLatitud() {
-        return latitud;
-    }
 
-    public void setLatitud(String latitud) {
-        this.latitud = latitud;
-    }
 
 
 }
